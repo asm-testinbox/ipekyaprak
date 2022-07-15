@@ -2,6 +2,143 @@
 - task: PowerShell@2
   inputs:
     targetType: 'inline'
+    script: |
+      $MinimumSeverity = 'Critical'
+              $CancelScan = $false
+              $BaseUrl = 'https://www.netsparkercloud.com' 
+              $WebsiteId ='1c5e4de7-48ea-4546-2cba-ad95000b1f4b'
+              $ScanType = 'Incremental'
+              $ProfileId = '5b449902-6e71-4829-9e3f-ae2a018944ea'
+              $IntegrationSystem = 'AzureDevOps'
+      
+              $FalsePositive=$false
+              $IsConfirmed=$false
+              $AcceptedRisk=$false
+              $DoNotFail=$false
+      
+              $SeverityOptionsForBuildFailMesssage = @{}
+              $SeverityOptionsForBuildFailMesssage.Add('DoNotFail', 'Do not fail the build')
+              $SeverityOptionsForBuildFailMesssage.Add('Critical', 'Critical')
+              $SeverityOptionsForBuildFailMesssage.Add('Critical,High', 'High or above')
+              $SeverityOptionsForBuildFailMesssage.Add('Critical,High,Medium', 'Medium or above')
+              $SeverityOptionsForBuildFailMesssage.Add('Critical,High,Medium,Low', 'Low or above')
+              $SeverityOptionsForBuildFailMesssage.Add('Critical,High,Medium,Low,Best Practice', 'Best Practices or above')
+      
+              $CreateScanUrl = $BaseUrl + '/api/1.0/scans/CreateFromPluginScanRequest'
+              $ScanInfoUrl = $BaseUrl + '/api/1.0/scans/ScanInfoForPlugin' 
+              $ScanCancelUrl = $BaseUrl + '/api/1.0/scans/CancelScanForPlugin/'
+      
+              $Body = @{ 
+                  WebsiteId = $WebsiteId; ProfileId = $ProfileId; ScanType = $ScanType; VcsCommitInfoModel = @{CiBuildConfigurationName = $env:SYSTEM_TEAMPROJECT; CiBuildHasChange = $env:BUILD_SOURCEVERSION; CiBuildId = $env:BUILD_BUILDID; CiBuildUrl= $env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI; Committer= $env:BUILD_REQUESTEDFOR; IntegrationSystem = $IntegrationSystem; VcsName = $env:BUILD_REPOSITORY_PROVIDER; VcsVersion = $env:BUILD_SOURCEVERSION }; 
+              }
+      
+              $Base64Auth = $([System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($env:USERID + ':' + $env:APITOKEN)))
+      
+              $HeaderWithAuthorization = @{ 
+                  Authorization = ('Basic ' + $Base64Auth)
+              }
+      
+              enum ScanTaskState {
+                  Queued = 0
+                  Scanning = 1
+                  Archiving = 2
+                  Complete = 3
+                  Failed = 4
+                  Cancelled = 5
+                  Delayed = 6
+                  Pausing = 7
+                  Paused = 8
+                  Resuming = 9
+              }
+      
+              try {
+                  function CancelScan ([guid] $scanTaskId) {
+                      Write-Output 'Requesting scan cancel..'
+                      $scanCancelApiResult = Invoke-WebRequest -Uri ($ScanCancelUrl + $scanTaskId) -Method POST -Headers $HeaderWithAuthorization
+                      Write-Output ('Scan cancel response status code: ' + $scanCancelApiResult.StatusCode)
+                      if ($scanCancelApiResult.IsValid -eq $false) {
+                          Write-Output 'Scan cancel error:'
+                          Write-Output $scanCancelApiResult.ErrorMessage
+                          throw 'Error occured while canceling scan.'
+                      }
+                      Write-Output ('Scan canceled, Id: ' + $scanTaskId)
+                  }
+      
+                  $scanApiResult = Invoke-RestMethod -Uri $CreateScanUrl -ContentType 'application/json; charset=UTF-8' -Method POST -Body ($Body | ConvertTo-Json) -Headers $HeaderWithAuthorization
+      
+                  Write-Output 'Create scan api result is:'
+                  Write-Output $scanApiResult
+                  Write-Output '' #create an empty line in terminal
+                                                              
+                  $scanTaskId = $scanApiResult.ScanTaskId
+      
+                  $IgnoredVulnerabilityStateFilterList= @{Present=$false;FixedUnconfirmed=$false;FixedCantRetest=$false;FixedConfirmed=$false;Revived=$false;Scanning=$false;Ignored=$false;AcceptedRisk=$AcceptedRisk;FalsePositive=$FalsePositive}
+                      $infoBody= @{
+                      ScanId=$scanTaskId;DoNotFail=$DoNotFail;IsConfirmed=$IsConfirmed;IgnoredVulnerabilityStateFilters=$IgnoredVulnerabilityStateFilterList; 	          
+                      }
+      
+                  Write-Output ('Scan task id is: ' + $scanTaskId)
+                  if ($scanApiResult.IsValid -and $scanTaskId) {
+                      do {
+                          Write-Output 'Requesting scan info..'
+                          $scanStatusResponse = Invoke-RestMethod -Uri ($ScanInfoUrl) -ContentType 'application/json; charset=UTF-8' -Headers $HeaderWithAuthorization -Method 'POST' -Body ($infoBody | ConvertTo-Json)
+                          if ($scanStatusResponse.IsValid -eq $false) {
+                              Write-Output 'Error when getting scan info.'
+                              throw 
+                          }
+      
+                          Write-Output ('---- Scan Info Start ----')
+                          Write-Output ('ScanTaskId: ' + $scanTaskId)
+                          Write-Output ('State: ' + $scanStatusResponse.State)
+                          Write-Output ('IsValid: ' + $scanStatusResponse.IsValid)
+                          Write-Output ('FoundedSeverities: ')
+                                                                          
+                          foreach ($severity in $scanStatusResponse.FoundedSeverityAndCounts.PsObject.Properties) {
+                              Write-Output ('-' + $severity.Name + '(' + $severity.Value + ')')
+                              $match = $MinimumSeverity.Contains($severity.Name)
+                              if ($match -eq $true) {
+                                  $severityText = $SeverityOptionsForBuildFailMesssage[$MinimumSeverity];
+                                  Write-Output ('---- Error Messages ----')
+                                  Write-Output ('Build failed because scan contains ' + $severityText + ' severity!')
+                                  Write-Output ('---- Error Messages ----')
+                                  Write-Output ('---- Scan Info End ----')
+      
+                                  if ($CancelScan -eq $true) {
+                                      CancelScan($scanTaskId)
+                                  }
+                                  throw
+                              }
+                          }
+                          Write-Output ('---- Scan Info End ----')
+                          $scanStatus = $scanStatusResponse.State
+                                                                          
+                          if ($scanStatus -eq [ScanTaskState]::Failed -or $scanStatus -eq [ScanTaskState]::Cancelled -or $scanStatus -eq [ScanTaskState]::Paused -or $scanStatus -eq [ScanTaskState]::Pausing ) {
+                              Write-Output ('---- Error Messages ----')
+                              Write-Output ('Scan aborted because state is ' + $scanStatus)
+                              Write-Output ('---- Error Messages ----')
+                              throw
+                          }
+      
+                          $isScanCompleted = $scanStatus -eq [ScanTaskState]::Complete
+                          if ($isScanCompleted -eq $true) {
+                              exit 0
+                          }
+                          else {
+                              Start-Sleep -s 10
+                          }
+                      } while ($isScanCompleted -eq $false)
+                  }
+              }
+              catch {
+                  $StatusCode = $_.Exception.Response.StatusCode.value__
+                  if ($null -ne $StatusCode) {
+                      Write-Output ('Operation failed with http status code: ' + $StatusCode)
+                  }
+                  exit 1
+              }
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
     script: 'Invoke-RestMethod -uri ''https://www.netsparkercloud.com/api/1.0/scans/CreateFromPluginScanRequest'' -ContentType ''application/json; charset=UTF-8'' -Method POST -Headers @{ Authorization = "Basic $([System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($env:USERID +'':''+$env:APITOKEN)))"} -Body $(@{ WebsiteId=''1c5e4de7-48ea-4546-2cba-ad95000b1f4b''; ProfileId=''30796609-867f-44ed-f52b-adb10254a0fb''; ScanType=''Incremental''; VcsCommitInfoModel = @{CiBuildConfigurationName = $env:SYSTEM_TEAMPROJECT; CiBuildHasChange = $env:BUILD_SOURCEVERSION; CiBuildId = $env:BUILD_BUILDID; CiBuildUrl= $env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI; Committer= $env:BUILD_REQUESTEDFOR; IntegrationSystem = ''AzureDevOps''; VcsName = $env:BUILD_REPOSITORY_PROVIDER; VcsVersion = $env:BUILD_SOURCEVERSION};}| ConvertTo-Json)'
 # Start with a minimal pipeline that you can customize to build and deploy your code.
 # Add steps that build, run tests, deploy, and more:
