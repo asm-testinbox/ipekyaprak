@@ -1,4 +1,8 @@
 # Starter pipeline
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
+    script: 'Invoke-RestMethod -uri ''https://www.netsparkercloud.com/api/1.0/scans/CreateFromPluginScanRequest'' -ContentType ''application/json; charset=UTF-8'' -Method POST -Headers @{ Authorization = "Basic $([System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($env:USERID +'':''+$env:APITOKEN)))"} -Body $(@{ WebsiteId=''1c5e4de7-48ea-4546-2cba-ad95000b1f4b''; ProfileId=''30796609-867f-44ed-f52b-adb10254a0fb''; ScanType=''Incremental''; VcsCommitInfoModel = @{CiBuildConfigurationName = $env:SYSTEM_TEAMPROJECT; CiBuildHasChange = $env:BUILD_SOURCEVERSION; CiBuildId = $env:BUILD_BUILDID; CiBuildUrl= $env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI; Committer= $env:BUILD_REQUESTEDFOR; IntegrationSystem = ''AzureDevOps''; VcsName = $env:BUILD_REPOSITORY_PROVIDER; VcsVersion = $env:BUILD_SOURCEVERSION};}| ConvertTo-Json)'
 # Start with a minimal pipeline that you can customize to build and deploy your code.
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
