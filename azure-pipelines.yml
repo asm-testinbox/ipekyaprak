@@ -147,7 +147,7 @@
 
 - main
 
-pool:
+
   vmImage: ubuntu-latest
 
 steps:
