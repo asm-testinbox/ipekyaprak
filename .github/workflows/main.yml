@@ -18,7 +18,7 @@ jobs:
           profile-id: '00000000-0000-0000-0000-000000000000' # FILL HERE
           user-id: ${{ secrets.de8d4f9b7f914621a3b3acdb01f8e690 }}
           api-token: ${{ secrets.R/KPlKlBKvRuW6zny525Nf1EJbJpSswyLZSkRmM6OF0= }}
-          base-url: 'https://www.netsparkercloud.com'
+          base-url: 'https://www.netsparkercloud.com/api/1.0/scans'
       # Displays output for action
       - name: Display Scan Request Message
         run: echo "${{ steps.netsparker-enterprise-scan-step.outputs.scan-message }}"
