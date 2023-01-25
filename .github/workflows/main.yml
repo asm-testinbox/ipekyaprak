@@ -13,7 +13,7 @@ jobs:
         id: netsparker-enterprise-scan-step
         uses: netsparker/Netsparker-Cloud-GitHub-Actions@v0.0.1
         with:
-          website-id: '4ac0508c-7361-4d1d-4754-ace80281b795' # FILL HERE
+          website-id: "4ac0508c-7361-4d1d-4754-ace80281b795" # FILL HERE
           scan-type: 'FullWithSelectedProfile'
           profile-id: '00000000-0000-0000-0000-000000000000' # FILL HERE
           user-id: ${{ secrets.de8d4f9b7f914621a3b3acdb01f8e690 }}
