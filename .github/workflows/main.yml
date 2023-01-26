@@ -1,8 +1,7 @@
 name: Netspaker Enterprise Scan Sample Workflow
 
-on:
-  push:
-    branches: [ main ]
+on: workflow_dispatch
+ 
 
 jobs:
   netspaker_scan_job:
@@ -10,15 +9,15 @@ jobs:
     steps:
       # Starts actions with given inputs
       - name: Start Netsparker Enterprise Scan
-        id: netsparker-enterprise-scan-step
         uses: netsparker/Netsparker-Cloud-GitHub-Actions@v0.0.1
+        id: netsparker-enterprise-scan-step
         with:
-          website-id: "4ac0508c-7361-4d1d-4754-ace80281b795" # FILL HERE
+          website-id: '4ac0508c-7361-4d1d-4754-ace80281b795'
           scan-type: 'FullWithSelectedProfile'
-          profile-id: '00000000-0000-0000-0000-000000000000' # FILL HERE
-          user-id: "secrets.de8d4f9b7f914621a3b3acdb01f8e690"
-          api-token: "secrets.R/KPlKlBKvRuW6zny525Nf1EJbJpSswyLZSkRmM6OF0="
-          base-url: 'https://www.netsparkercloud.com/api/1.0/scans'
+          profile-id: '00000000-0000-0000-0000-000000000000'
+          user-id: USERID
+          api-token: TOKEN
+          base-url: 'https://www.netsparkercloud.com'
       # Displays output for action
       - name: Display Scan Request Message
         run: echo "${{ steps.netsparker-enterprise-scan-step.outputs.scan-message }}"
