@@ -1,6 +1,7 @@
 name: Netspaker Enterprise Scan Sample Workflow
 
 on: workflow_dispatch
+push:
  
 
 jobs:
